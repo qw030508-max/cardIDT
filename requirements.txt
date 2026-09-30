@@ -1,0 +1,12 @@
+torch
+torchvision
+git+https://github.com/openai/CLIP.git
+easyocr   # config.USE_OCR = True 일 때만 필요
+opencv-python
+numpy
+pillow
+requests
+# YOLOv5 (torch.hub) 실행에 필요
+pandas
+seaborn
+ultralytics
