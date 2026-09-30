@@ -1,0 +1,9 @@
+# 라즈베리 파이 5 (기계 모드: python machine.py) 용
+# picamera2는 pip가 아니라 apt로 설치 → README "라즈베리 파이" 참고
+torch
+torchvision
+git+https://github.com/openai/CLIP.git
+opencv-python-headless    # 기계 모드는 화면이 필요 없음
+numpy<2                   # apt로 설치한 picamera2가 numpy 1.x 기준
+pillow
+requests

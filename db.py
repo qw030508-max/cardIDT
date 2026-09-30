@@ -82,6 +82,12 @@ def find_card_by_name(text):
     return row
 
 
+def get_card_type(card_id):
+    with connect() as conn:
+        row = conn.execute("SELECT card_type FROM cards WHERE card_id=?", (card_id,)).fetchone()
+    return row[0] if row else None
+
+
 def search_cards(keyword, limit=10):
     """수동 검색용 (한글/영어 둘 다)"""
     with connect() as conn:

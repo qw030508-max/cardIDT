@@ -37,10 +37,12 @@ class Recognizer:
     def __init__(self):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
 
-        print("YOLOv5 모델 로딩 중...")
-        self.yolo = load_yolo()
-        self.yolo.conf = config.YOLO_CONF
-        print("YOLOv5 로드 완료!")
+        self.yolo = None
+        if config.USE_YOLO or config.USE_OCR:   # OCR도 YOLO의 Cname 박스가 필요
+            print("YOLOv5 모델 로딩 중...")
+            self.yolo = load_yolo()
+            self.yolo.conf = config.YOLO_CONF
+            print("YOLOv5 로드 완료!")
 
         print("CLIP 로딩 중...")
         self.clip_model, self.clip_prep = clip.load(config.CLIP_MODEL, device=self.device)
@@ -86,19 +88,22 @@ class Recognizer:
     # 1. 일러스트 크롭
     # ══════════════════════════════════════
     def crop_arts(self, frame):
-        """반환: (크롭 리스트[BGR], 외곽선 4점 또는 None, YOLO 결과 또는 None)"""
+        """반환: (크롭 리스트[BGR], 외곽선 4점, YOLO 결과, 펴진 카드) — 없는 값은 None"""
         quad = find_card_quad(frame)
         if quad is not None:
-            return art_crops(warp_card(frame, quad)), quad, None
+            card = warp_card(frame, quad)
+            return art_crops(card), quad, None, card
 
         # 테두리 못 찾음 → YOLO Arts 박스로 대체
+        if self.yolo is None:
+            return [], None, None, None
         predictions = self.detect(frame)
         arts = self.best_box(predictions, "Arts")
         if not arts:
-            return [], None, predictions
+            return [], None, predictions, None
         x1, y1, x2, y2 = arts["box"]
         outline = np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], np.float32)
-        return [frame[y1:y2, x1:x2]], outline, predictions
+        return [frame[y1:y2, x1:x2]], outline, predictions, None
 
     # ══════════════════════════════════════
     # 2. CLIP 벡터 검색
@@ -127,10 +132,29 @@ class Recognizer:
             confident:  1위를 믿을 만한지,
             arts:       대표 크롭(BGR), outline: 외곽선 4점, predictions: YOLO 결과(대체 시))
         """
-        crops, outline, predictions = self.crop_arts(frame)
+        crops, outline, predictions, card = self.crop_arts(frame)
         if not crops:
             return None
 
+        ranked, confident = self.rank(crops)
+        # 확신이 없고 카드를 펴서 잘랐으면 → 위아래가 뒤집혀 들어온 카드일 수 있으니 180° 돌려서 한 번 더
+        if not confident and card is not None:
+            flipped = art_crops(cv2.rotate(card, cv2.ROTATE_180))
+            ranked_f, confident_f = self.rank(flipped)
+            if (confident_f, ranked_f[0]["inliers"]) > (confident, ranked[0]["inliers"]):
+                print("  (180° 뒤집힌 카드로 인식)")
+                crops, ranked, confident = flipped, ranked_f, confident_f
+
+        return {
+            "candidates":  ranked,
+            "confident":   confident,
+            "arts":        crops[0],
+            "outline":     outline,
+            "predictions": predictions,
+        }
+
+    def rank(self, crops):
+        """크롭들 → (CLIP 후보를 특징점 매칭으로 재정렬한 리스트, 확신 여부)"""
         # 크롭마다 CLIP 후보를 모아서 합치기 (일반/펜듈럼 비율 둘 다)
         cands = {}
         for crop in crops:
@@ -148,14 +172,7 @@ class Recognizer:
         first  = ranked[0]["inliers"]
         second = max((c["inliers"] for c in ranked[1:]), default=0)
         confident = first >= config.MIN_INLIERS and first >= config.INLIER_RATIO * second
-
-        return {
-            "candidates":  ranked,
-            "confident":   confident,
-            "arts":        crops[0],
-            "outline":     outline,
-            "predictions": predictions,
-        }
+        return ranked, confident
 
     # ══════════════════════════════════════
     # (선택) OCR 카드명

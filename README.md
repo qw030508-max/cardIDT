@@ -11,6 +11,9 @@
 ## 구조
 
 ```
+machine.py       기계 모드 (화면 없이, 분류 통 결정)
+sorter.py        분류 규칙 (몬스터/마법/함정/그 외 → 통 번호)
+camera.py        카메라 열기 (Picamera2 / OpenCV)
 main.py          카메라 루프 (Space 촬영 / C 확인창 / U 되돌리기 / O 오버프레임 / I 재고 / F 통계 / Q 종료)
 recognizer.py    인식 파이프라인 (크롭 → CLIP → 특징점 재정렬, 연속 촬영)
 card_warp.py     카드 테두리 찾기, 원근 보정, 일러스트 위치 비율
@@ -43,3 +46,31 @@ python main.py
 ```
 
 카메라 번호는 `config.py`의 `CAMERA_INDEX` (DroidCam 1, 웹캠 0).
+
+## 기계 모드 (카드 분류기)
+
+```
+python machine.py            # 카드를 놓고 Enter → 인식 → 몇 번 통인지 출력
+python machine.py --no-save  # 재고에 저장하지 않고 결과만 보기
+```
+
+- 통 0~2: `config.BIN_FILTERS` (기본 몬스터 / 마법 / 함정), 통 3: 나머지 + 확신 없음
+- 위아래가 뒤집혀 들어온 카드도 180° 돌려서 다시 확인
+- 확신 없는 카드 사진은 `feedback_images/machine_*.jpg` 로 저장
+- 급지/분류 모터가 생기면 `machine.py`의 `wait_for_card()` / `send_to_bin()` 만 바꾸면 됨
+
+### 라즈베리 파이 5 설치
+
+```
+sudo apt install -y python3-picamera2 git
+git clone https://github.com/qw030508-max/cardIDT.git
+cd cardIDT
+python3 -m venv --system-site-packages .venv   # apt의 picamera2를 venv에서 쓰기 위해
+source .venv/bin/activate
+pip install -r requirements-pi.txt
+```
+
+데이터 파일은 저장소에 없으니 PC에서 복사하거나(USB 등) 파이에서 다시 만들기:
+`yugioh.db`, `clip_vectors.npz`, `card_images/` (약 2GB, 특징점 매칭에 필요)
+
+`config.py`에서 `CAMERA_BACKEND = "picamera2"`, `USE_YOLO = False` 로 바꾸고 `python machine.py`.

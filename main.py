@@ -7,6 +7,7 @@ import cv2
 
 import config
 import db
+from camera import open_camera
 from recognizer import Recognizer
 from ui import put_korean_text, show_debug_window
 
@@ -108,9 +109,7 @@ def main():
 
     recognizer = Recognizer()
 
-    cap = cv2.VideoCapture(config.CAMERA_INDEX)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH,  config.FRAME_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, config.FRAME_HEIGHT)
+    cap = open_camera()
 
     print("\n=== 유희왕 카드 인식기 (그림 매칭) ===")
     print(f"  Space : 촬영 및 인식 (최대 {config.SHOTS_PER_SCAN}장, 확신하면 바로 멈춤)")
